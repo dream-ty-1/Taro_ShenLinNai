@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>沈临奈の塔罗小铺</title>
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Serif+SC:wght@500;700&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cpath fill='%23a855f7' d='M40 0l7 20l20 7l-20 7l-7 20l-7-20l-20-7l20-7z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: radial-gradient(1200px 600px at 50% 30%, #223 0%, #111 60%, #0b0b12 100%);
+      --gold: #d6b36b; --gold-2: #a27c37;
+      --card-w: 180px; --card-h: 300px; --gap: 20px;
+      --deal-ms: 650ms; --flip-ms: 500ms; --scatter-ms: 800ms; --fade-ms: 500ms;
+    }
+    *{ box-sizing: border-box; }
+    html,body{ height:100%; }
+    body{ margin:0; color:#eee; background:var(--bg); font-family:'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans SC', sans-serif; overflow:hidden; -webkit-font-smoothing:antialiased; }
+
+    /* 星空背景 */
+    #sky{ position:fixed; inset:0; z-index:-1; background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(168,85,247,.10), transparent 60%),
+      radial-gradient(1200px 800px at 90% 10%, rgba(96,165,250,.10), transparent 65%),
+      linear-gradient(#05050a, #0c0c13);
+    }
+
+    /* 舞台 */
+    .stage{ position:absolute; inset:0; overflow:hidden; }
+    .board{ position:relative; width:100%; height:100%; }
+
+    /* 中心牌堆 */
+    .deck-anchor{ position:absolute; left:50%; top:42%; transform:translate(-50%,-50%) scale(1); width:var(--card-w); height:var(--card-h); pointer-events:none; opacity:0; transition: opacity var(--fade-ms) ease, transform var(--fade-ms) ease; }
+    .deck-anchor.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+    .deck-anchor.vanish{ opacity:0; transform:translate(-50%,-70%) scale(.96); }
+    .deck-visual{ position:absolute; inset:0; }
+    .deck-visual .back-card{ position:absolute; inset:0; border-radius:16px; border:1px solid rgba(255,255,255,0.08);
+      background:
+        radial-gradient(120px 60px at 50% 30%, rgba(255,255,255,0.06), rgba(255,255,255,0) 70%),
+        repeating-linear-gradient(45deg, rgba(214,179,107,0.14) 0 6px, rgba(214,179,107,0.08) 6px 12px),
+        linear-gradient(180deg, #2a2634, #1a1622);
+      box-shadow:0 18px 40px rgba(0,0,0,0.55);
+      transition: transform var(--scatter-ms) ease; transform-origin:50% 50%; }
+
+    /* 卡片 */
+    .card{ position:absolute; width:var(--card-w); height:var(--card-h); transform-style:preserve-3d; perspective:1000px; cursor:pointer; transition: transform var(--deal-ms) ease; will-change: transform; }
+    .card .inner{ position:absolute; inset:0; transform-style:preserve-3d; transition: transform var(--flip-ms) ease; }
+    .card .face{ position:absolute; inset:0; border-radius:16px; backface-visibility:hidden; overflow:hidden; }
+    .card .back{ border:1px solid rgba(255,255,255,0.08); background:
+      radial-gradient(120px 60px at 50% 30%, rgba(255,255,255,0.08), rgba(255,255,255,0) 70%),
+      repeating-linear-gradient(45deg, rgba(214,179,107,0.16) 0 6px, rgba(214,179,107,0.10) 6px 12px),
+      linear-gradient(180deg, #2a2634, #1a1622);
+      box-shadow:0 18px 40px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.05); }
+    .card .front{ transform:rotateY(180deg); background:transparent; border:none; box-shadow:none; color:#1f1a10; }
+    .front .art-full{ position:absolute; inset:0; background:#000; }
+    .front .art-full img{ width:100%; height:100%; object-fit:contain; display:block; }
+    .front .badge{ position:absolute; left:8px; top:8px; background:#2a2230; color:#f8e7c2; border:1px solid rgba(214,179,107,0.6); border-radius:999px; padding:2px 8px; font-size:11px; letter-spacing:.5px; z-index:2 }
+    .card.flipped .inner{ transform:rotateY(180deg); }
+    .card.reversed{ transform: rotateZ(180deg); }
+    .card.reversed .front .badge{ transform: rotateZ(180deg); }
+
+    /* 落位后的轻微摇晃 */
+    .card.settled{ animation: sway 5s ease-in-out infinite alternate; }
+    @keyframes sway{ 0%{ transform: translateZ(0) rotateZ(0deg); } 100%{ transform: translateY(-1px) rotateZ(0.8deg); } }
+
+    /* 提示/计数器（可选） */
+    .counter{ position:fixed; right:12px; bottom:12px; font-size:12px; opacity:.85; background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:4px 8px; }
+
+    /* 左侧“浮动文字”控件 */
+    .side-controls{ position:fixed; left:18px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:14px; z-index:1200; opacity:0; pointer-events:none; transition:opacity var(--fade-ms) ease, transform var(--fade-ms) ease; }
+    .side-controls.show{ opacity:1; pointer-events:auto; transform:translateY(calc(-50%)); }
+    .float-link{ appearance:none; background:none; border:none; color:#f8e7c2; font-weight:800; letter-spacing:.3px; text-shadow:0 0 12px rgba(214,179,107,.25); cursor:pointer; padding:4px 0; font-size:18px; position:relative; }
+    .float-link:after{ content:''; position:absolute; left:0; right:0; bottom:-2px; height:2px; background:linear-gradient(90deg, rgba(214,179,107,.0), rgba(214,179,107,.9), rgba(214,179,107,.0)); opacity:.0; transform:scaleX(.6); transition:opacity .25s ease, transform .25s ease; }
+    .float-link:hover{ filter: brightness(1.08); transform: translateY(-1px); }
+    .float-link:hover:after{ opacity:.8; transform:scaleX(1); }
+    .float-link[disabled]{ opacity:.35; pointer-events:none; }
+
+    /* 开场：小丑牌风格文字浮现（抖动+故障+描边） */
+    .intro{ position:fixed; inset:0; display:grid; place-items:center; z-index:3000; background: radial-gradient(1600px 700px at 50% 30%, rgba(15,15,26,.88), rgba(15,15,26,.55) 60%, rgba(15,15,26,.35) 100%); backdrop-filter: blur(6px); transition: opacity .6s ease, visibility .6s ease; }
+    .intro.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+    .intro .panel{ text-align:center; max-width:min(740px, 90vw); padding:28px 20px; }
+    .intro .joker{ font-family:'ZCOOL XiaoWei','Noto Serif SC',serif; font-size:36px; line-height:1.25; letter-spacing:1.2px; margin-bottom:24px; position:relative; color:#f0e9d8; text-shadow: 0 0 0 transparent, 0 0 24px rgba(214,179,107,.25); animation: flicker 2.5s ease-in-out infinite; }
+    .intro .joker i{ font-style:normal; display:inline-block; animation: glitch 1.8s steps(2,end) infinite; }
+    @keyframes flicker{ 0%,19%,21%,23%,80%,100%{ opacity:1 } 20%,22%{ opacity:.72 } }
+    @keyframes glitch{ 0%{ transform: translate(0,0) } 20%{ transform: translate(.4px,-.3px) } 40%{ transform: translate(-.4px,.3px) } 60%{ transform: translate(.2px,.6px) } 80%{ transform: translate(-.6px,-.2px) } 100%{ transform: translate(0,0) } }
+    .intro .choices{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+    .intro .choice{ appearance:none; border:1px solid rgba(214,179,107,.35); color:#f8e7c2; background:linear-gradient(180deg,#2a2230,#1c1621); padding:12px 18px; border-radius:14px; cursor:pointer; font-weight:800; letter-spacing:.5px; box-shadow:0 6px 16px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.05); transition: transform .1s ease, box-shadow .2s ease; }
+    .intro .choice:hover{ transform: translateY(-1px); box-shadow:0 10px 24px rgba(0,0,0,.45); }
+
+    /* 星尘 */
+    .sparkle{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+    .sparkle i{ position:absolute; width:2px; height:2px; background:#fff; opacity:.5; border-radius:50%; filter: drop-shadow(0 0 4px #d6b36b); animation: twinkle 4s linear infinite; }
+    @keyframes twinkle{ 50%{ opacity:.1; transform: translateY(-4px) scale(.8); } }
+
+    /* 燃烧消失效果 */
+    .card.burning{ animation: burn 900ms ease forwards; box-shadow: 0 0 0 rgba(255,120,40,.0), 0 0 0 rgba(255,200,80,.0); position:absolute; }
+    .card.burning::after{ content:''; position:absolute; inset:-20% -10% -30% -10%; background: conic-gradient(from 0deg, rgba(255,180,60,.0), rgba(255,180,60,.25) 10%, rgba(255,90,10,.35) 35%, rgba(255,200,120,.15) 45%, rgba(255,180,60,.0) 60%); filter: blur(14px); mix-blend-mode: screen; animation: flames 900ms ease forwards; pointer-events:none; }
+    @keyframes flames{ 0%{ opacity:.0; transform: translateY(10px) scale(.85) rotate(-6deg); } 35%{ opacity:.9 } 100%{ opacity:0; transform: translateY(-28px) scale(1.05) rotate(6deg); } }
+    @keyframes burn{ 0%{ filter: none; opacity:1; transform: translateY(0) scale(1) rotate(var(--r,0deg)); box-shadow: 0 0 16px rgba(255,160,60,.25), 0 0 28px rgba(255,80,20,.3); }
+      60%{ filter: brightness(1.6) saturate(1.2) blur(1.2px); }
+      100%{ opacity:0; transform: translateY(-34px) scale(.86) rotate(var(--r,2deg)); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    }
+
+    @media (max-width:900px){ :root{ --card-w: 140px; --card-h: 230px; --gap:16px; } .deck-anchor{ top:44%; } }
+    @media (max-width:480px){
+      :root{ --card-w: 96px; --card-h: 160px; --gap:12px; }
+      .deck-anchor{ top:46%; }
+      .intro .joker{ font-size:28px; }
+      /* 侧边控件变为底栏 */
+      .side-controls{ left:0; right:0; top:auto; bottom:0; transform:none; flex-direction:row; justify-content:space-around; padding: max(10px, env(safe-area-inset-bottom)) 12px  max(10px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(15,15,26,.0), rgba(15,15,26,.45)); border-top: 1px solid rgba(255,255,255,.12); }
+      .side-controls.show{ transform:none; }
+      .float-link{ font-size:16px; }
+    }
+    @media (min-width:1400px){ :root{ --card-w: 220px; --card-h: 360px; --gap:28px; } }
+  </style>
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
+  <!-- 开场选择（小丑牌风格文字浮现） -->
+  <div class="intro" id="intro">
+    <div class="panel">
+      <div class="joker">我知道你定会离去，只庆幸你曾来过<i>“我来到，我看见，我记录。”</i></div>
+      <div class="choices">
+        <button class="choice" data-mode="single">单张预测</button>
+        <button class="choice" data-mode="three">三张牌阵</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 舞台与牌堆 -->
+  <div class="stage">
+    <div class="board" id="board">
+      <div class="deck-anchor" id="deckAnchor">
+        <div class="deck-visual" id="deckVisual"></div>
+      </div>
+      <div class="sparkle" id="sparkle"></div>
+    </div>
+  </div>
+
+  <!-- 左侧浮动文字控件 -->
+  <div class="side-controls" id="sideControls">
+    <button class="float-link" id="sideShuffle">洗 牌</button>
+    <button class="float-link" id="sideDraw">抽 牌</button>
+    <button class="float-link" id="sideReset">重 置</button>
+  </div>
+
+  <div class="counter" id="counter">牌堆：78 张</div>
+
+  <script>
+    // 星空背景
+    (function(){
+      const canvas = document.getElementById('sky'); const ctx = canvas.getContext('2d');
+      let w,h,dpr,stars=[],rafId; const DPR_CAP=2;
+      function resize(){ dpr=Math.min(window.devicePixelRatio||1,DPR_CAP); w=canvas.width=Math.floor(innerWidth*dpr); h=canvas.height=Math.floor(innerHeight*dpr); canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px'; }
+      function createStars(){ stars=[]; const count=Math.round(Math.min(420,(innerWidth*innerHeight)/3600)); for(let i=0;i<count;i++){ stars.push({ x:Math.random()*w,y:Math.random()*h,z:Math.random(),r:Math.random()*1.4+.2,tw:Math.random()*Math.PI*2,sp:(Math.random()*0.6+0.2)*(Math.random()<0.5?-1:1) }); } }
+      function draw(){ ctx.clearRect(0,0,w,h); for(const s of stars){ s.tw+=0.02+(1-s.z)*0.02; const alpha=0.5+Math.sin(s.tw)*0.5; s.x+=s.sp*(0.05+(1-s.z)*0.1); if(s.x<-10) s.x=w+10; if(s.x>w+10) s.x=-10; ctx.beginPath(); ctx.arc(s.x,s.y,s.r*dpr*(1-s.z*0.5),0,Math.PI*2); ctx.fillStyle=`rgba(255,255,255,${0.25+alpha*0.75})`; ctx.fill(); } rafId=requestAnimationFrame(draw); }
+      addEventListener('resize', ()=>{ resize(); createStars(); }); resize(); createStars(); draw(); if(matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){ cancelAnimationFrame(rafId); }
+    })();
+  </script>
+
+  <script>
+    // ------- 工具函数 -------
+    const rand=(min,max)=>Math.random()*(max-min)+min; const choice=(arr)=>arr[Math.floor(Math.random()*arr.length)];
+
+    // ------- 构建 78 张塔罗牌数据 -------
+    function buildDeck(){
+      const majors=["0 愚者","I 魔术师","II 女祭司","III 女皇","IV 皇帝","V 教皇","VI 恋人","VII 战车","VIII 力量","IX 隐者","X 命运之轮","XI 正义","XII 倒吊人","XIII 死神","XIV 节制","XV 恶魔","XVI 高塔","XVII 星星","XVIII 月亮","XIX 太阳","XX 审判","XXI 世界"];
+      const suitInfo=[{suit:"权杖",icon:"⚚"},{suit:"圣杯",icon:"🍷"},{suit:"宝剑",icon:"⚔️"},{suit:"星币",icon:"★"}];
+      const ranks=["A","2","3","4","5","6","7","8","9","10","侍从","骑士","王后","国王"];
+      const deck=[]; majors.forEach((name,i)=>deck.push({id:`MA${i}`,name,suit:"大阿尔克那",icon:"♇"}));
+      suitInfo.forEach(({suit,icon})=>{ ranks.forEach(r=>deck.push({id:`${suit}-${r}`,name:`${suit} ${r}`,suit,icon})); });
+      return deck;
+    }
+
+    function resolveImageCandidates(card){
+      const exts=['.jpg','.jpeg','.png','.webp','.JPG','.JPEG','.PNG','.WEBP'];
+      const baseDir='78张电子图'; const candidates=[];
+      const norm=(s)=>s.replace(/[：:]/g,'_').replace(/\s+/g,'_').replace(/_{2,}/g,'_');
+      const combos=(dir,names)=>{ names.forEach(n=>exts.forEach(ext=>candidates.push(`${dir}/${n}${ext}`))); };
+      if(card.suit==='大阿尔克那'){
+        const name=card.name; const parts=name.split(/\s+/); const roman=parts[0]||''; const label=parts.slice(1).join(' ')||name;
+        const idx=(()=>{ const m=String(card.id).match(/MA(\d+)/); return m?parseInt(m[1],10):undefined; })();
+        const d2=(n)=> n<10?`0${n}`:`${n}`;
+        const rawNames=[]; rawNames.push(name,label,`${roman} ${label}`,`${roman}_${label}`,`${roman}-${label}`); if(Number.isInteger(idx)){ rawNames.push(`${idx} ${label}`,`${idx}_${label}`,`${idx}-${label}`,`${d2(idx)} ${label}`,`${d2(idx)}_${label}`,`${d2(idx)}-${label}`,`${d2(idx)}`,`${idx}`); }
+        const set=new Set(); rawNames.forEach(n=>{ set.add(norm(n)); set.add(norm(n).replace(/_/g,'-')); set.add(norm(n).replace(/_/g,'')); });
+        combos(`${baseDir}/大牌`, Array.from(set));
+      }else{
+        const suitDir=card.suit; const rank=card.name.replace(/^.*?\s/,''); const suit=card.suit;
+        const rankMap={'A':'01','1':'01','2':'02','3':'03','4':'04','5':'05','6':'06','7':'07','8':'08','9':'09','10':'10','侍从':'Page','骑士':'Knight','王后':'Queen','国王':'King'};
+        const mapped=rankMap[rank]||rank;
+        const rawNames=[`${mapped}`,`${parseInt(mapped,10)}`,`${suit} ${rank}`,`${suit}_${rank}`,`${suit}-${rank}`,`${rank} ${suit}`,`${rank}_${suit}`,`${rank}-${suit}`,`${rank}`];
+        const set=new Set(); rawNames.forEach(n=>{ set.add(norm(n)); set.add(norm(n).replace(/_/g,'-')); set.add(norm(n).replace(/_/g,'')); });
+        combos(`${baseDir}/${suitDir}`, Array.from(set));
+      }
+      return candidates;
+    }
+
+    function tryAttachCardImage(card, artContainer){
+      const urls=resolveImageCandidates(card); const img=new Image(); img.decoding='async'; img.loading='eager'; img.alt=card.name; let i=0;
+      return new Promise((resolve)=>{ const tryNext=()=>{ if(i>=urls.length){ return resolve(false); } const url=urls[i++]; img.onload=()=>{ artContainer.innerHTML=''; artContainer.appendChild(img); resolve(true); }; img.onerror=tryNext; img.src=encodeURI(url); }; tryNext(); });
+    }
+
+    function shuffleInPlace(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+    // ------- 状态 -------
+    const state={ fullDeck:buildDeck(), deckOrder:[], drawn:[], dealing:false, mode:null, locked:false };
+
+    // ------- 节点 -------
+    const board=document.getElementById('board');
+    const deckAnchor=document.getElementById('deckAnchor');
+    const deckVisual=document.getElementById('deckVisual');
+    const counter=document.getElementById('counter');
+    const intro=document.getElementById('intro');
+    const sideControls=document.getElementById('sideControls');
+    const sideShuffle=document.getElementById('sideShuffle');
+    const sideDraw=document.getElementById('sideDraw');
+    const sideReset=document.getElementById('sideReset');
+
+    // ------- 牌堆可视化 -------
+    function rebuildDeckVisual(){
+      deckVisual.innerHTML='';
+      const thickness=Math.min(30, state.deckOrder.length);
+      for(let i=0;i<thickness;i++){
+        const el=document.createElement('div'); el.className='back-card'; el.style.transform=`translate(0, -${i*0.5}px)`; el.style.zIndex=(100+i).toString(); deckVisual.appendChild(el);
+      }
+      counter.textContent=`牌堆：${state.deckOrder.length} 张`;
+    }
+
+    function animateShuffle(){ if(state.dealing) return; const cards=Array.from(deckVisual.children); const radius=160; cards.forEach(el=>{ const angle=Math.random()*Math.PI*2; const r=rand(radius*.4, radius); const dx=Math.cos(angle)*r; const dy=Math.sin(angle)*r; const rot=rand(-25,25); el.style.transition=`transform var(--scatter-ms) ease`; el.style.transform=`translate(${dx}px, ${dy}px) rotate(${rot}deg)`; }); setTimeout(()=>{ cards.forEach(el=>{ el.style.transform=`translate(0,0) rotate(0deg)`; }); shuffleInPlace(state.deckOrder); }, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scatter-ms')) ); }
+
+    function centerOf(el){ const r=el.getBoundingClientRect(); const parent=board.getBoundingClientRect(); return { x:r.left-parent.left+r.width/2, y:r.top-parent.top+r.height/2 } }
+
+    function computeTargetPosition(indexOnTable){
+      const rootStyles=getComputedStyle(document.documentElement); const cardW=parseFloat(rootStyles.getPropertyValue('--card-w')); const cardH=parseFloat(rootStyles.getPropertyValue('--card-h')); const gap=parseFloat(rootStyles.getPropertyValue('--gap'));
+      const b=board.getBoundingClientRect();
+      if(state.mode==='three'){
+        const gridW=3*cardW+2*gap; const startX=(b.width-gridW)/2; const x=startX+indexOnTable*(cardW+gap); const y=(b.height-cardH)/2; return {x,y};
+      } else { // single
+        const x=(b.width-cardW)/2; const y=(b.height-cardH)/2; return {x,y};
+      }
+    }
+
+    function createDrawnCard(cardObj, indexOnTable){
+      const card=document.createElement('div'); card.className='card'; card.style.zIndex=(1000+indexOnTable).toString(); card.style.pointerEvents='none';
+      const inner=document.createElement('div'); inner.className='inner';
+      const back=document.createElement('div'); back.className='face back';
+      const front=document.createElement('div'); front.className='face front';
+      const artFull=document.createElement('div'); artFull.className='art-full';
+      const badge=document.createElement('div'); badge.className='badge'; badge.textContent='正位';
+      front.appendChild(artFull); front.appendChild(badge); inner.appendChild(back); inner.appendChild(front); card.appendChild(inner);
+
+      const c=centerOf(deckAnchor); const cardW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-w')); const cardH=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
+      card.style.left=`${c.x-(cardW/2)}px`; card.style.top=`${c.y-(cardH/2)}px`;
+
+      const {x:targetX,y:targetY}=computeTargetPosition(indexOnTable);
+
+      tryAttachCardImage(cardObj, artFull);
+
+      const reversed=Math.random()<0.5; if(reversed){ card.classList.add('reversed'); badge.textContent='逆位'; }
+
+      card.addEventListener('click',()=>{ card.classList.toggle('flipped'); });
+
+      board.appendChild(card);
+
+      requestAnimationFrame(()=>{
+        card.style.transition=`transform var(--deal-ms) ease, left var(--deal-ms) ease, top var(--deal-ms) ease`;
+        card.style.left=`${targetX}px`; card.style.top=`${targetY}px`;
+        const imgEl=artFull.querySelector('img'); if(imgEl){ imgEl.style.objectFit='contain'; }
+      });
+
+      const onEnd=(ev)=>{
+        if(ev.target!==card) return; // ignore bubbling
+        card.style.pointerEvents='auto';
+        card.classList.add('settled');
+        card.removeEventListener('transitionend', onEnd);
+      };
+      card.addEventListener('transitionend', onEnd);
+
+      return { el:card, meta:cardObj, reversed };
+    }
+
+    function draw(n=1){
+      if(state.dealing||state.locked) return; state.dealing=true;
+      n=Math.min(n, state.deckOrder.length); const startIndex=state.drawn.length; const drawnNow=[];
+      for(let i=0;i<n;i++){ const idx=state.deckOrder.pop(); const cardObj=state.fullDeck[idx]; const card=createDrawnCard(cardObj, startIndex+i); drawnNow.push(card); }
+      rebuildDeckVisual();
+
+      const dealMs=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--deal-ms'));
+      setTimeout(()=>{ state.dealing=false; }, dealMs+20);
+      state.drawn.push(...drawnNow);
+
+      // 抽够目标数量后，上隐牌堆并锁定抽牌
+      const target = state.mode==='three'?3:1;
+      if(state.drawn.length>=target){
+        setTimeout(()=>{ deckAnchor.classList.add('vanish'); }, dealMs+60);
+        state.locked=true; sideDraw.setAttribute('disabled','');
+      }
+    }
+
+    function relayout(){ if(!state.drawn.length) return; state.drawn.forEach(({el},i)=>{ const {x,y}=computeTargetPosition(i); el.style.left=`${x}px`; el.style.top=`${y}px`; }); }
+
+    function resetAll({rechoose=false}={}){
+      // 卡片燃烧消失
+      const cards=state.drawn.map(d=>d.el);
+      let left=cards.length;
+      if(left===0){ finalize(); return; }
+      cards.forEach((el)=>{
+        el.style.setProperty('--r', `${rand(-3,3)}deg`);
+        el.classList.add('burning');
+        el.addEventListener('animationend', ()=>{ el.remove(); if(--left===0) finalize(); }, {once:true});
+      });
+
+      function finalize(){
+        state.drawn=[]; state.deckOrder=Array.from({length: state.fullDeck.length}, (_,i)=>i); shuffleInPlace(state.deckOrder);
+        rebuildDeckVisual();
+        state.dealing=false; state.locked=false;
+        deckAnchor.classList.remove('vanish'); // 让牌堆回到场上并渐显
+        deckAnchor.classList.add('show');
+        sideDraw.removeAttribute('disabled');
+        if(rechoose){ intro.classList.remove('hide'); sideControls.classList.remove('show'); deckAnchor.classList.remove('show'); }
+      }
+    }
+
+    // 星尘
+    function initSparkles(){ const host=document.getElementById('sparkle'); for(let i=0;i<120;i++){ const s=document.createElement('i'); s.style.left=rand(0,100)+'%'; s.style.top=rand(0,100)+'%'; s.style.animationDelay=rand(0,4)+'s'; host.appendChild(s);} }
+
+    // 选择模式后展示主舞台
+    function chooseMode(mode){ state.mode=mode; intro.classList.add('hide'); sideControls.classList.add('show'); deckAnchor.classList.add('show'); state.locked=false; sideDraw.removeAttribute('disabled'); }
+
+    // 事件绑定
+    document.querySelectorAll('.intro .choice').forEach(btn=>{ btn.addEventListener('click', ()=> chooseMode(btn.dataset.mode)); });
+    sideShuffle.addEventListener('click', ()=>{ if(!state.locked) animateShuffle(); });
+    sideDraw.addEventListener('click', ()=>{ if(state.mode){ draw(state.mode==='three'?3:1); } });
+    sideReset.addEventListener('click', ()=>{ resetAll({ rechoose:false }); });
+
+    window.addEventListener('resize', relayout);
+
+    // 启动
+    (function start(){
+      state.deckOrder=Array.from({length: state.fullDeck.length}, (_,i)=>i); shuffleInPlace(state.deckOrder);
+      rebuildDeckVisual(); initSparkles();
+    })();
+  </script>
+</body>
+</html>
