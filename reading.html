@@ -173,15 +173,23 @@
     }
 
     function resolveImageCandidates(card){
-      const exts=['.jpg','.jpeg','.png','.webp','.JPG','.JPEG','.PNG','.WEBP'];
+      const exts=['.webp','.avif','.jpg','.jpeg','.png','.WEBP','.AVIF','.JPG','.JPEG','.PNG'];
       const baseDir='78张电子图'; const candidates=[];
       const norm=(s)=>s.replace(/[：:]/g,'_').replace(/\s+/g,'_').replace(/_{2,}/g,'_');
-      const combos=(dir,names)=>{ names.forEach(n=>exts.forEach(ext=>candidates.push(`${dir}/${n}${ext}`))); };
+      const combos=(dir,names)=>{ names.forEach(n=>exts.forEach(ext=>candidates.push(`./${dir}/${n}${ext}`))); };
       if(card.suit==='大阿尔克那'){
         const name=card.name; const parts=name.split(/\s+/); const roman=parts[0]||''; const label=parts.slice(1).join(' ')||name;
         const idx=(()=>{ const m=String(card.id).match(/MA(\d+)/); return m?parseInt(m[1],10):undefined; })();
         const d2=(n)=> n<10?`0${n}`:`${n}`;
-        const rawNames=[]; rawNames.push(name,label,`${roman} ${label}`,`${roman}_${label}`,`${roman}-${label}`); if(Number.isInteger(idx)){ rawNames.push(`${idx} ${label}`,`${idx}_${label}`,`${idx}-${label}`,`${d2(idx)} ${label}`,`${d2(idx)}_${label}`,`${d2(idx)}-${label}`,`${d2(idx)}`,`${idx}`); }
+        const rawNames=[];
+        if(Number.isInteger(idx)){
+          // 先尝试纯数字文件名（与你的资源匹配：00.jpg..21.jpg）
+          rawNames.push(`${d2(idx)}`, `${idx}`);
+          // 再尝试“数字+中文名”的组合
+          rawNames.push(`${idx} ${label}`,`${idx}_${label}`,`${idx}-${label}`,`${d2(idx)} ${label}`,`${d2(idx)}_${label}`,`${d2(idx)}-${label}`);
+        }
+        // 最后再尝试罗马数字/中文名等其它可能命名
+        rawNames.push(name,label,`${roman} ${label}`,`${roman}_${label}`,`${roman}-${label}`);
         const set=new Set(); rawNames.forEach(n=>{ set.add(norm(n)); set.add(norm(n).replace(/_/g,'-')); set.add(norm(n).replace(/_/g,'')); });
         combos(`${baseDir}/大牌`, Array.from(set));
       }else{
@@ -196,8 +204,18 @@
     }
 
     function tryAttachCardImage(card, artContainer){
-      const urls=resolveImageCandidates(card); const img=new Image(); img.decoding='async'; img.loading='eager'; img.alt=card.name; let i=0;
-      return new Promise((resolve)=>{ const tryNext=()=>{ if(i>=urls.length){ return resolve(false); } const url=urls[i++]; img.onload=()=>{ artContainer.innerHTML=''; artContainer.appendChild(img); resolve(true); }; img.onerror=tryNext; img.src=encodeURI(url); }; tryNext(); });
+      const urls=resolveImageCandidates(card);
+      const img=new Image(); img.decoding='async'; img.loading='eager'; img.alt=card.name; let i=0;
+      return new Promise((resolve)=>{
+        const tryNext=()=>{
+          if(i>=urls.length){ return resolve(false); }
+          const url=urls[i++];
+          img.onload=()=>{ artContainer.innerHTML=''; artContainer.appendChild(img); resolve(true); };
+          img.onerror=tryNext;
+          img.src=encodeURI(url);
+        };
+        tryNext();
+      });
     }
 
     function shuffleInPlace(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
